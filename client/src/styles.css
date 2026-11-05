@@ -41,32 +41,72 @@ main {
   padding: 16px;
 }
 
-h1 {
-  margin: 0 0 16px;
-}
-
 h2,
 h3 {
   margin: 0 0 8px;
   font-size: 1rem;
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: minmax(260px, 340px) 1fr;
-  gap: 16px;
-  align-items: start;
-}
-
-@media (max-width: 760px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-aside {
+main {
   display: grid;
   gap: 16px;
+}
+
+h1 {
+  margin: 0;
+}
+
+header {
+  flex-wrap: wrap;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tr.clickable {
+  cursor: pointer;
+}
+
+tr.clickable:hover {
+  background: var(--bg);
+}
+
+.table-wrap {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.table-wrap > .muted {
+  padding: 12px;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.back {
+  justify-self: start;
 }
 
 .panel {
@@ -176,4 +216,62 @@ button.link.active {
   background: var(--error-bg);
   color: var(--error-text);
   border-radius: 4px;
+}
+
+.save-status {
+  margin: 0;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.save-status.failed {
+  color: var(--error-text);
+  white-space: normal;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: -16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  margin-bottom: -1px;
+  padding: 8px 16px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  color: var(--muted);
+}
+
+.tab.active {
+  background: var(--panel);
+  border-color: var(--border);
+  border-bottom-color: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tabs + .table-wrap {
+  border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.topbar {
+  justify-content: flex-end;
+}
+
+.name-field input {
+  width: 200px;
+}
+
+.save-status.locked {
+  color: var(--accent);
+}
+
+textarea.body.readonly {
+  opacity: 0.75;
+  cursor: default;
 }

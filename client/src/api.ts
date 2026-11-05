@@ -1,11 +1,16 @@
+export type LockInfo = { holder: string; expiresAt: string };
+
 export type Document = {
   id: string;
   title: string;
   body: string;
-  version: number;
+  createdBy: string;
+  revision: number;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /** Who is editing the document right now, if anyone. */
+  lock: LockInfo | null;
 };
 
 export type RangeReplace = {
@@ -29,64 +34,91 @@ export type TextMatch = {
 
 export type SearchResult<T> = { total: number; items: T[] };
 
+export type Status = "active" | "archived";
+
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly index?: number,
+    /** The full error body, e.g. `index` for a bad patch or `lock` for a 423. */
+    readonly body: { index?: number; lock?: LockInfo | null } = {},
   ) {
     super(message);
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+type Options = { method?: string; json?: unknown; lockToken?: string; keepalive?: boolean };
+
+async function request<T>(path: string, options: Options = {}): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options.json !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (options.lockToken) {
+    headers["Lock-Token"] = options.lockToken;
+  }
   const response = await fetch(path, {
-    ...init,
-    headers: init?.body ? { "Content-Type": "application/json" } : undefined,
+    method: options.method,
+    headers,
+    body: options.json === undefined ? undefined : JSON.stringify(options.json),
+    keepalive: options.keepalive,
   });
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const error = data as { error?: string; index?: number } | null;
-    throw new ApiError(error?.error ?? `request failed (${response.status})`, response.status, error?.index);
+    const error = (data ?? {}) as { error?: string; index?: number; lock?: LockInfo | null };
+    throw new ApiError(error.error ?? `request failed (${response.status})`, response.status, error);
   }
   return data as T;
 }
 
-function json(method: string, body: unknown): RequestInit {
-  return { method, body: JSON.stringify(body) };
-}
+const doc = (id: string) => `/documents/${encodeURIComponent(id)}`;
 
-export function listDocuments(includeArchived: boolean): Promise<Document[]> {
-  const query = includeArchived ? "?includeArchived=true" : "";
-  return request<{ documents: Document[] }>(`/documents${query}`).then((result) => result.documents);
+export function listDocuments(status: Status): Promise<Document[]> {
+  const params = new URLSearchParams({ status });
+  return request<{ documents: Document[] }>(`/documents?${params}`).then((result) => result.documents);
 }
 
 export function getDocument(id: string): Promise<Document> {
-  return request(`/documents/${encodeURIComponent(id)}`);
+  return request(doc(id));
 }
 
-export function createDocument(input: { title: string; body: string }): Promise<Document> {
-  return request("/documents", json("POST", input));
+export function createDocument(input: { title: string; body: string; createdBy: string }): Promise<Document> {
+  return request("/documents", { method: "POST", json: input });
 }
 
-export function patchDocument(id: string, expectedVersion: number, changes: RangeReplace[]): Promise<Document> {
-  return request(`/documents/${encodeURIComponent(id)}`, json("PATCH", { expectedVersion, changes }));
+/** Take the edit lock, or renew it by passing the token you already hold. */
+export function acquireLock(id: string, holder: string, lockToken?: string): Promise<{ lockToken: string; lock: LockInfo }> {
+  return request(`${doc(id)}/lock`, { method: "POST", json: { holder }, lockToken });
 }
 
-export function setArchived(id: string, archived: boolean, expectedVersion: number): Promise<Document> {
-  const action = archived ? "archive" : "unarchive";
-  return request(`/documents/${encodeURIComponent(id)}/${action}`, json("POST", { expectedVersion }));
+/** `keepalive` lets the request finish while the page is closing. */
+export function releaseLock(id: string, lockToken: string, keepalive = false): Promise<void> {
+  return request(`${doc(id)}/lock`, { method: "DELETE", lockToken, keepalive });
 }
 
-export function searchDocuments(q: string, includeArchived: boolean): Promise<SearchResult<GlobalMatch>> {
-  const params = new URLSearchParams({ q });
-  if (includeArchived) {
-    params.set("includeArchived", "true");
-  }
+/**
+ * `expectedRevision` is the revision the change was computed against. With the
+ * lock held it always matches; it guards against editing from a stale body.
+ */
+export function patchDocument(
+  id: string,
+  lockToken: string,
+  expectedRevision: number,
+  changes: RangeReplace[],
+): Promise<Document> {
+  return request(doc(id), { method: "PATCH", json: { expectedRevision, changes }, lockToken });
+}
+
+export function setArchived(id: string, archived: boolean, lockToken?: string): Promise<Document> {
+  return request(`${doc(id)}/${archived ? "archive" : "unarchive"}`, { method: "POST", lockToken });
+}
+
+export function searchDocuments(q: string, status: Status): Promise<SearchResult<GlobalMatch>> {
+  const params = new URLSearchParams({ q, status });
   return request(`/documents/search?${params}`);
 }
 
 export function searchDocument(id: string, q: string): Promise<SearchResult<TextMatch>> {
   const params = new URLSearchParams({ q });
-  return request(`/documents/${encodeURIComponent(id)}/search?${params}`);
+  return request(`${doc(id)}/search?${params}`);
 }

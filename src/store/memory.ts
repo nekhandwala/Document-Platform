@@ -4,13 +4,14 @@ import type { Document, DocumentStore, StoreResult } from "../domain/document";
 export class InMemoryDocumentStore implements DocumentStore {
   private readonly documents = new Map<string, Document>();
 
-  async create(input: { title: string; body: string }): Promise<Document> {
+  async create(input: { title: string; body: string; createdBy: string }): Promise<Document> {
     const now = new Date().toISOString();
     const document: Document = {
       id: randomUUID(),
       title: input.title,
       body: input.body,
-      version: 1,
+      createdBy: input.createdBy,
+      revision: 1,
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
@@ -30,12 +31,12 @@ export class InMemoryDocumentStore implements DocumentStore {
       .map(clone);
   }
 
-  async save(id: string, next: { body: string; expectedVersion?: number }): Promise<StoreResult> {
+  async save(id: string, next: { body: string; expectedRevision?: number }): Promise<StoreResult> {
     const current = this.documents.get(id);
     if (!current) {
       return "not_found";
     }
-    if (next.expectedVersion !== undefined && next.expectedVersion !== current.version) {
+    if (next.expectedRevision !== undefined && next.expectedRevision !== current.revision) {
       return "conflict";
     }
     if (current.archivedAt !== null) {
@@ -44,25 +45,25 @@ export class InMemoryDocumentStore implements DocumentStore {
     const updated: Document = {
       ...current,
       body: next.body,
-      version: current.version + 1,
+      revision: current.revision + 1,
       updatedAt: new Date().toISOString(),
     };
     this.documents.set(id, updated);
     return clone(updated);
   }
 
-  async setArchived(id: string, archivedAt: string | null, expectedVersion?: number): Promise<StoreResult> {
+  async setArchived(id: string, archivedAt: string | null, expectedRevision?: number): Promise<StoreResult> {
     const current = this.documents.get(id);
     if (!current) {
       return "not_found";
     }
-    if (expectedVersion !== undefined && expectedVersion !== current.version) {
+    if (expectedRevision !== undefined && expectedRevision !== current.revision) {
       return "conflict";
     }
     const updated: Document = {
       ...current,
       archivedAt,
-      version: current.version + 1,
+      revision: current.revision + 1,
       updatedAt: new Date().toISOString(),
     };
     this.documents.set(id, updated);

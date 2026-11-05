@@ -2,7 +2,8 @@ export type Document = {
   id: string;
   title: string;
   body: string;
-  version: number;
+  createdBy: string;
+  revision: number;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -17,16 +18,16 @@ export function isDocument(result: StoreResult): result is Document {
 }
 
 export interface DocumentStore {
-  create(input: { title: string; body: string }): Promise<Document>;
+  create(input: { title: string; body: string; createdBy: string }): Promise<Document>;
   get(id: string): Promise<Document | null>;
   list(): Promise<Document[]>;
   save(
     id: string,
-    next: { body: string; expectedVersion?: number },
+    next: { body: string; expectedRevision?: number },
   ): Promise<StoreResult>;
   setArchived(
     id: string,
     archivedAt: string | null,
-    expectedVersion?: number,
+    expectedRevision?: number,
   ): Promise<StoreResult>;
 }
